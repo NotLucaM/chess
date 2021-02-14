@@ -1,5 +1,7 @@
 mod window;
 
+use window::Game;
+
 fn main() {
-    window::init();
+    Game::new().game_loop();
 }
