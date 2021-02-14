@@ -6,7 +6,7 @@ use glfw::{Action, Context, Key};
 
 // following the tutorial from http://nercury.github.io/rust/opengl/tutorial/2018/02/10/opengl-in-rust-from-scratch-03-compiling-shaders.html
 
-pub struct Shader {
+struct Shader {
     id: gl::types::GLuint,
 }
 
@@ -24,7 +24,7 @@ impl Shader {
         Shader::from_source(source, gl::FRAGMENT_SHADER)
     }
 
-    pub fn id(&self) -> gl::types::GLuint {
+    fn id(&self) -> gl::types::GLuint {
         self.id
     }
 }
@@ -37,12 +37,12 @@ impl Drop for Shader {
     }
 }
 
-pub struct Program {
+struct Program {
     id: gl::types::GLuint,
 }
 
 impl Program {
-    pub fn from_shaders(shaders: &[Shader]) -> Result<Program, String> {
+    fn from_shaders(shaders: &[Shader]) -> Result<Program, String> {
         let program_id = unsafe { gl::CreateProgram() };
 
         for shader in shaders {
@@ -84,7 +84,7 @@ impl Program {
         Ok(Program { id: program_id })
     }
 
-    pub fn set_used(&self) {
+    fn set_used(&self) {
         unsafe {
             gl::UseProgram(self.id);
         }
@@ -114,11 +114,11 @@ pub fn init() {
 
     // TODO: delete this code
     let vert_shader = Shader::from_vert_source(
-        &CString::new(include_str!("triangle.vert")).unwrap()
+        &CString::new(include_str!("white.vert")).unwrap()
     ).unwrap();
 
     let frag_shader = Shader::from_frag_source(
-        &CString::new(include_str!("triangle.frag")).unwrap()
+        &CString::new(include_str!("white.frag")).unwrap()
     ).unwrap();
 
     let shader_program = Program::from_shaders(
@@ -190,7 +190,7 @@ pub fn init() {
     }
 }
 
-pub fn draw(_board: &[i32], window: &mut glfw::Window, shader_program: &Program, vao: gl::types::GLuint) {
+fn draw(_board: &[i32], window: &mut glfw::Window, shader_program: &Program, vao: gl::types::GLuint) {
     //let _gl = gl::load_with(|s| window.get_proc_address(s) as *const std::os::raw::c_void);
 
     shader_program.set_used();
