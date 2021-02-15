@@ -2,12 +2,13 @@ extern crate glfw;
 
 extern crate gl;
 use gl::types::*;
+use image::GenericImageView;
 
 extern crate image;
-use image::GenericImage;
 
 use std::sync::mpsc::Receiver;
 use std::ffi::{CString, CStr};
+use std::os::raw::c_void;
 use glfw::{Window, WindowEvent, Glfw, Context, Key, Action};
 
 // following the tutorial from http://nercury.github.io/rust/opengl/tutorial/2018/02/10/opengl-in-rust-from-scratch-03-compiling-shaders.html
@@ -110,29 +111,63 @@ struct Texture {
 }
 
 impl Texture {
-    fn from_file(path: &str) -> Result<Program, String> {
+    fn from_file(path: &str) -> Result<Texture, String> {
         let mut texture_id = 0;
-        gl::GenTextures(1, &mut texture_id);
-        gl::BindTexture(gl::TEXTURE_2D, texture_id);
+        unsafe {
+            gl::GenTextures(1, &mut texture_id);
+            gl::BindTexture(gl::TEXTURE_2D, texture_id);
 
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::REPEAT as i32);
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::REPEAT as i32);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::REPEAT as i32);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::REPEAT as i32);
 
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as i32);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as i32);
 
-        let img = image::open(&std::path::Path::new(path)).expect("Failed to load texture");
-        let data = img.raw_pixels();
-        gl::TexImage2D(gl::TEXTURE_2D,
-               0,
-               gl::RGB as i32,
-               img.width() as i32,
-               img.height() as i32,
-               0,
-               gl::RGB,
-               gl::UNSIGNED_BYTE,
-               &data[0] as *const u8 as *const c_void);
-        gl::GenerateMipmap(gl::TEXTURE_2D);
+            let img = image::open(&std::path::Path::new(path)).expect("Failed to load texture");
+            let data = img.raw_pixels();
+            gl::TexImage2D(
+                    gl::TEXTURE_2D,
+                    0,
+                    gl::RGB as i32,
+                    img.width() as i32,
+                    img.height() as i32,
+                    0,
+                    gl::RGB,
+                    gl::UNSIGNED_BYTE,
+                    &data[0] as *const u8 as *const c_void);
+            gl::GenerateMipmap(gl::TEXTURE_2D);
+        }
+
+        let mut success: GLint = 1;
+        unsafe {
+            gl::GetProgramiv(texture_id, gl::LINK_STATUS, &mut success);
+        }
+
+        if success == 0 {
+            let mut len: GLint = 0;
+            unsafe {
+                gl::GetProgramiv(texture_id, gl::INFO_LOG_LENGTH, &mut len);
+            }
+
+            let error = create_whitespace_cstring_with_len(len as usize);
+
+            unsafe {
+                gl::GetProgramInfoLog(
+                    texture_id,
+                    len,
+                    std::ptr::null_mut(),
+                    error.as_ptr() as *mut GLchar
+                );
+            }
+
+            return Err(error.to_string_lossy().into_owned());
+        }
+
+        Ok(Texture { id: texture_id })
+    }
+
+    fn set_used(&self) {
+        unsafe { gl::BindTexture(gl::TEXTURE_2D, self.id) }
     }
 }
 
@@ -142,6 +177,7 @@ pub struct Game {
     events: Receiver<(f64, WindowEvent)>,
     white_shader: Program,
     black_shader: Program,
+    textures: [Texture; 12],
     board: [GLuint; 64],
 }
 
@@ -161,6 +197,7 @@ impl Game {
 
         let (white_shader, black_shader) = Game::generate_shaders();
         let board = Game::generate_vaos();
+        let textures = Game::generate_textures();
 
         Game {
             glfw,
@@ -168,6 +205,7 @@ impl Game {
             events,
             white_shader,
             black_shader,
+            textures,
             board,
         }
     }
@@ -197,8 +235,24 @@ impl Game {
             gl::Clear(gl::COLOR_BUFFER_BIT);
         }
         self.draw_board();
+        self.draw_peices();
 
         self.window.swap_buffers();
+    }
+
+    fn generate_textures() -> [Texture; 12] {
+        [Texture::from_file("black-pawn.png").unwrap(),
+         Texture::from_file("black-pawn.png").unwrap(),
+         Texture::from_file("black-pawn.png").unwrap(),
+         Texture::from_file("black-pawn.png").unwrap(),
+         Texture::from_file("black-pawn.png").unwrap(),
+         Texture::from_file("black-pawn.png").unwrap(),
+         Texture::from_file("black-pawn.png").unwrap(),
+         Texture::from_file("black-pawn.png").unwrap(),
+         Texture::from_file("black-pawn.png").unwrap(),
+         Texture::from_file("black-pawn.png").unwrap(),
+         Texture::from_file("black-pawn.png").unwrap(),
+         Texture::from_file("black-pawn.png").unwrap(),]
     }
 
     fn generate_shaders() -> (Program, Program) {
@@ -213,7 +267,6 @@ impl Game {
         let white_shaders = Program::from_shaders(
             &[white_vert, white_frag]
         ).unwrap();
-
 
         let black_vert = Shader::from_vert_source(
             &CString::new(include_str!("black.vert")).unwrap()
@@ -292,19 +345,34 @@ impl Game {
     }
 
     fn draw_board(&self) {
+        let draw_square = |program: &Program, vao: GLuint| {
+            program.set_used();
+            unsafe {
+                gl::BindVertexArray(vao);
+                gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, std::ptr::null());
+            }
+        };
         for i in 0..8 {
             for j in 0..8 {
                 let square_color = if (i + j) % 2 == 0 { &self.black_shader } else { &self.white_shader };
-                self.draw_square(square_color, self.board[i * 8 + j]);
+                draw_square(square_color, self.board[i * 8 + j]);
             }
         }
     }
-    
-    fn draw_square(&self, program: &Program, vao: GLuint) {
-        program.set_used();
-        unsafe {
-            gl::BindVertexArray(vao);
-            gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, std::ptr::null());
+
+    fn draw_peices(&self) {
+        let draw_peice = |texture: &Texture, vao: GLuint| {
+            texture.set_used();
+            self.white_shader.set_used();
+            unsafe {
+                gl::BindVertexArray(vao);
+                gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, std::ptr::null());
+            }
+        };
+        for i in 0..8 {
+            for j in 0..8 {
+                draw_peice(&self.textures[0], self.board[i * 8 + j]);
+            }
         }
     }
 }
