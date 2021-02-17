@@ -6,10 +6,10 @@ use image::GenericImageView;
 
 extern crate image;
 
-use std::sync::mpsc::Receiver;
-use std::ffi::{CString, CStr};
+use glfw::{Action, Context, Glfw, Key, Window, WindowEvent};
+use std::ffi::{CStr, CString};
 use std::os::raw::c_void;
-use glfw::{Window, WindowEvent, Glfw, Context, Key, Action};
+use std::sync::mpsc::Receiver;
 
 // following the tutorial from http://nercury.github.io/rust/opengl/tutorial/2018/02/10/opengl-in-rust-from-scratch-03-compiling-shaders.html
 
@@ -53,10 +53,14 @@ impl Program {
         let program_id = unsafe { gl::CreateProgram() };
 
         for shader in shaders {
-            unsafe { gl::AttachShader(program_id, shader.id()); }
+            unsafe {
+                gl::AttachShader(program_id, shader.id());
+            }
         }
 
-        unsafe { gl::LinkProgram(program_id); }
+        unsafe {
+            gl::LinkProgram(program_id);
+        }
 
         let mut success: GLint = 1;
         unsafe {
@@ -76,16 +80,17 @@ impl Program {
                     program_id,
                     len,
                     std::ptr::null_mut(),
-                    error.as_ptr() as *mut GLchar
+                    error.as_ptr() as *mut GLchar,
                 );
             }
 
             return Err(error.to_string_lossy().into_owned());
         }
 
-
         for shader in shaders {
-            unsafe { gl::DetachShader(program_id, shader.id()); }
+            unsafe {
+                gl::DetachShader(program_id, shader.id());
+            }
         }
 
         Ok(Program { id: program_id })
@@ -126,15 +131,16 @@ impl Texture {
             let img = image::open(&std::path::Path::new(path)).expect("Failed to load texture");
             let data = img.raw_pixels();
             gl::TexImage2D(
-                    gl::TEXTURE_2D,
-                    0,
-                    gl::RGB as i32,
-                    img.width() as i32,
-                    img.height() as i32,
-                    0,
-                    gl::RGB,
-                    gl::UNSIGNED_BYTE,
-                    &data[0] as *const u8 as *const c_void);
+                gl::TEXTURE_2D,
+                0,
+                gl::RGB as i32,
+                img.width() as i32,
+                img.height() as i32,
+                0,
+                gl::RGB,
+                gl::UNSIGNED_BYTE,
+                &data[0] as *const u8 as *const c_void,
+            );
             gl::GenerateMipmap(gl::TEXTURE_2D);
         }
 
@@ -156,7 +162,7 @@ impl Texture {
                     texture_id,
                     len,
                     std::ptr::null_mut(),
-                    error.as_ptr() as *mut GLchar
+                    error.as_ptr() as *mut GLchar,
                 );
             }
 
@@ -185,7 +191,8 @@ impl Game {
     pub fn new() -> Game {
         let glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
-        let (mut window, events) = glfw.create_window(800, 800, "Chess", glfw::WindowMode::Windowed)
+        let (mut window, events) = glfw
+            .create_window(800, 800, "Chess", glfw::WindowMode::Windowed)
             .expect("Failed to create GLFW window.");
 
         window.set_key_polling(true);
@@ -216,7 +223,7 @@ impl Game {
             self.draw(&[0; 5]);
         }
     }
-    
+
     fn handle_window_event(&mut self) {
         self.glfw.poll_events();
         for (_, event) in glfw::flush_messages(&self.events) {
@@ -229,7 +236,7 @@ impl Game {
         }
     }
 
-    fn draw(&mut self,_board: &[i32]) {
+    fn draw(&mut self, _board: &[i32]) {
         unsafe {
             gl::ClearColor(0.2, 0.3, 0.3, 1.0);
             gl::Clear(gl::COLOR_BUFFER_BIT);
@@ -241,44 +248,38 @@ impl Game {
     }
 
     fn generate_textures() -> [Texture; 12] {
-        [Texture::from_file("black-pawn.png").unwrap(),
-         Texture::from_file("black-pawn.png").unwrap(),
-         Texture::from_file("black-pawn.png").unwrap(),
-         Texture::from_file("black-pawn.png").unwrap(),
-         Texture::from_file("black-pawn.png").unwrap(),
-         Texture::from_file("black-pawn.png").unwrap(),
-         Texture::from_file("black-pawn.png").unwrap(),
-         Texture::from_file("black-pawn.png").unwrap(),
-         Texture::from_file("black-pawn.png").unwrap(),
-         Texture::from_file("black-pawn.png").unwrap(),
-         Texture::from_file("black-pawn.png").unwrap(),
-         Texture::from_file("black-pawn.png").unwrap(),]
+        [
+            Texture::from_file("black-pawn.png").unwrap(),
+            Texture::from_file("black-pawn.png").unwrap(),
+            Texture::from_file("black-pawn.png").unwrap(),
+            Texture::from_file("black-pawn.png").unwrap(),
+            Texture::from_file("black-pawn.png").unwrap(),
+            Texture::from_file("black-pawn.png").unwrap(),
+            Texture::from_file("black-pawn.png").unwrap(),
+            Texture::from_file("black-pawn.png").unwrap(),
+            Texture::from_file("black-pawn.png").unwrap(),
+            Texture::from_file("black-pawn.png").unwrap(),
+            Texture::from_file("black-pawn.png").unwrap(),
+            Texture::from_file("black-pawn.png").unwrap(),
+        ]
     }
 
     fn generate_shaders() -> (Program, Program) {
-        let white_vert = Shader::from_vert_source(
-            &CString::new(include_str!("white.vert")).unwrap()
-        ).unwrap();
+        let white_vert =
+            Shader::from_vert_source(&CString::new(include_str!("white.vert")).unwrap()).unwrap();
 
-        let white_frag = Shader::from_frag_source(
-            &CString::new(include_str!("white.frag")).unwrap()
-        ).unwrap();
+        let white_frag =
+            Shader::from_frag_source(&CString::new(include_str!("white.frag")).unwrap()).unwrap();
 
-        let white_shaders = Program::from_shaders(
-            &[white_vert, white_frag]
-        ).unwrap();
+        let white_shaders = Program::from_shaders(&[white_vert, white_frag]).unwrap();
 
-        let black_vert = Shader::from_vert_source(
-            &CString::new(include_str!("black.vert")).unwrap()
-        ).unwrap();
+        let black_vert =
+            Shader::from_vert_source(&CString::new(include_str!("black.vert")).unwrap()).unwrap();
 
-        let black_frag = Shader::from_frag_source(
-            &CString::new(include_str!("black.frag")).unwrap()
-        ).unwrap();
+        let black_frag =
+            Shader::from_frag_source(&CString::new(include_str!("black.frag")).unwrap()).unwrap();
 
-        let black_shaders = Program::from_shaders(
-            &[black_vert, black_frag]
-        ).unwrap();
+        let black_shaders = Program::from_shaders(&[black_vert, black_frag]).unwrap();
 
         (white_shaders, black_shaders)
     }
@@ -287,15 +288,23 @@ impl Game {
         let generate_vao = |x: f32, y: f32| -> GLuint {
             let square_size: f32 = 2.0 / 8.0;
             let vertices: [f32; 12] = [
-                x * square_size + square_size,    y * square_size + square_size,    0.0, // top right
-                x * square_size + square_size,    y * square_size,                  0.0, // bottom right
-                x * square_size,                  y * square_size,                  0.0, // bottom left
-                x * square_size,                  y * square_size + square_size,    0.0, // top left
+                x * square_size + square_size,
+                y * square_size + square_size,
+                0.0, // top right
+                x * square_size + square_size,
+                y * square_size,
+                0.0, // bottom right
+                x * square_size,
+                y * square_size,
+                0.0, // bottom left
+                x * square_size,
+                y * square_size + square_size,
+                0.0, // top left
             ];
 
             let indices = [
-                0, 1, 3,  // first Triangle
-                1, 2, 3   // second Triangle
+                0, 1, 3, // first Triangle
+                1, 2, 3, // second Triangle
             ];
 
             let (mut vbo, mut vao, mut ebo) = (0, 0, 0);
@@ -309,18 +318,18 @@ impl Game {
 
                 gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
                 gl::BufferData(
-                    gl::ARRAY_BUFFER, // target
+                    gl::ARRAY_BUFFER,                                                // target
                     (vertices.len() * std::mem::size_of::<GLfloat>()) as GLsizeiptr, // size of data in bytes
                     &vertices[0] as *const f32 as *const GLvoid, // pointer to data
-                    gl::STATIC_DRAW, // usage
+                    gl::STATIC_DRAW,                             // usage
                 );
 
                 gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, ebo);
                 gl::BufferData(
-                    gl::ELEMENT_ARRAY_BUFFER, // target
+                    gl::ELEMENT_ARRAY_BUFFER,                                       // target
                     (indices.len() * std::mem::size_of::<GLfloat>()) as GLsizeiptr, // size of data in bytes
                     &indices[0] as *const i32 as *const GLvoid, // pointer to data
-                    gl::STATIC_DRAW, // usage
+                    gl::STATIC_DRAW,                            // usage
                 );
 
                 let stride = 3 * std::mem::size_of::<GLfloat>() as GLsizei;
@@ -335,7 +344,7 @@ impl Game {
             vao
         };
 
-        let mut voas: [GLuint; 64] = [0; 64]; 
+        let mut voas: [GLuint; 64] = [0; 64];
         for i in 0..8 {
             for j in 0..8 {
                 voas[i * 8 + j] = generate_vao(i as f32 - 4.0, j as f32 - 4.0);
@@ -354,7 +363,11 @@ impl Game {
         };
         for i in 0..8 {
             for j in 0..8 {
-                let square_color = if (i + j) % 2 == 0 { &self.black_shader } else { &self.white_shader };
+                let square_color = if (i + j) % 2 == 0 {
+                    &self.black_shader
+                } else {
+                    &self.white_shader
+                };
                 draw_square(square_color, self.board[i * 8 + j]);
             }
         }
@@ -383,7 +396,7 @@ fn shader_from_source(source: &CStr, kind: GLuint) -> Result<GLuint, String> {
         gl::ShaderSource(id, 1, &source.as_ptr(), std::ptr::null());
         gl::CompileShader(id);
     }
-    
+
     let mut success: GLint = 1;
     unsafe {
         gl::GetShaderiv(id, gl::COMPILE_STATUS, &mut success);
@@ -396,16 +409,11 @@ fn shader_from_source(source: &CStr, kind: GLuint) -> Result<GLuint, String> {
         }
         let error: CString = create_whitespace_cstring_with_len(len as usize);
         unsafe {
-            gl::GetShaderInfoLog(
-                id,
-                len,
-                std::ptr::null_mut(),
-                error.as_ptr() as *mut GLchar
-            );
+            gl::GetShaderInfoLog(id, len, std::ptr::null_mut(), error.as_ptr() as *mut GLchar);
         }
         return Err(error.to_string_lossy().into_owned());
     }
-    
+
     Ok(id)
 }
 
